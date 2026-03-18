@@ -1,0 +1,1695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEEP DELVE — Mining Game</title>
+<style>
+  /* ===== GLOBAL STYLES ===== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    color: #e8d5a3;
+  }
+
+  /* ===== CANVAS WRAPPER ===== */
+  #gameWrapper {
+    position: relative;
+    display: flex;
+    gap: 0;
+    align-items: flex-start;
+  }
+
+  #gameCanvas {
+    display: block;
+    image-rendering: pixelated;
+    border: 2px solid #3a2a1a;
+    box-shadow: 0 0 40px rgba(255,160,60,0.15), 0 0 80px rgba(255,100,20,0.08);
+  }
+
+  /* ===== HUD PANEL (right side) ===== */
+  #hud {
+    width: 220px;
+    background: linear-gradient(180deg, #12100e 0%, #0e0c0a 100%);
+    border: 2px solid #3a2a1a;
+    border-left: none;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 600px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .hud-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #f0c060;
+    text-align: center;
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(240,192,96,0.5);
+    border-bottom: 1px solid #3a2a1a;
+    padding-bottom: 6px;
+    margin-bottom: 2px;
+  }
+
+  .hud-section {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #2a1a0a;
+    border-radius: 4px;
+    padding: 8px;
+  }
+
+  .hud-label {
+    font-size: 9px;
+    color: #7a6a4a;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+
+  .hud-value {
+    font-size: 14px;
+    color: #e8d5a3;
+    font-weight: bold;
+  }
+
+  .hud-value.gold { color: #f0c060; text-shadow: 0 0 8px rgba(240,192,96,0.4); }
+  .hud-value.green { color: #60e080; }
+  .hud-value.red { color: #e06060; }
+  .hud-value.blue { color: #60a0e0; }
+
+  /* ===== STAT BARS ===== */
+  .stat-bar-wrap {
+    background: #1a1208;
+    border: 1px solid #2a1a0a;
+    border-radius: 2px;
+    height: 8px;
+    overflow: hidden;
+    margin-top: 3px;
+  }
+  .stat-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.2s ease;
+  }
+  .stat-bar.health { background: linear-gradient(90deg, #c03030, #e05050); }
+  .stat-bar.stamina { background: linear-gradient(90deg, #2060a0, #40a0e0); }
+
+  /* ===== INVENTORY GRID ===== */
+  .inv-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    margin-top: 4px;
+  }
+
+  .inv-slot {
+    aspect-ratio: 1;
+    background: #1a1208;
+    border: 1px solid #2a1a0a;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    font-size: 16px;
+    transition: border-color 0.1s;
+  }
+  .inv-slot.filled { border-color: #4a3a1a; }
+  .inv-slot-count {
+    position: absolute;
+    bottom: 1px;
+    right: 2px;
+    font-size: 7px;
+    color: #e8d5a3;
+    background: rgba(0,0,0,0.7);
+    padding: 0 2px;
+    border-radius: 1px;
+    line-height: 1.2;
+  }
+
+  /* ===== UPGRADE BUTTONS ===== */
+  .upgrade-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #1a1208, #2a1a08);
+    border: 1px solid #4a3010;
+    border-radius: 3px;
+    color: #e8c060;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    padding: 5px 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.1s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 3px;
+    letter-spacing: 0.5px;
+  }
+  .upgrade-btn:hover { background: linear-gradient(135deg, #2a2010, #3a2a10); border-color: #7a5020; }
+  .upgrade-btn:active { transform: scale(0.98); }
+  .upgrade-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+  .upgrade-btn .cost { color: #f0c060; font-size: 9px; }
+
+  /* ===== MESSAGES ===== */
+  #messageLog {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 4px;
+    pointer-events: none;
+    z-index: 100;
+    width: 400px;
+    align-items: center;
+  }
+
+  .msg {
+    background: rgba(10,8,6,0.92);
+    border: 1px solid #4a3010;
+    border-radius: 4px;
+    padding: 5px 14px;
+    font-size: 11px;
+    color: #e8d5a3;
+    animation: msgFade 2.5s ease forwards;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .msg.gold-msg { color: #f0c060; border-color: #7a5020; }
+  .msg.warn-msg { color: #e06060; border-color: #7a2020; }
+  .msg.good-msg { color: #60e080; border-color: #207a40; }
+
+  @keyframes msgFade {
+    0% { opacity: 0; transform: translateY(8px); }
+    15% { opacity: 1; transform: translateY(0); }
+    70% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-4px); }
+  }
+
+  /* ===== SHOP OVERLAY ===== */
+  #shopOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  #shopOverlay.active { display: flex; }
+
+  #shopPanel {
+    background: linear-gradient(160deg, #14100a, #0e0c08);
+    border: 2px solid #5a3a10;
+    border-radius: 8px;
+    padding: 24px;
+    width: 480px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 0 60px rgba(240,160,40,0.2);
+  }
+
+  #shopPanel h2 {
+    color: #f0c060;
+    text-align: center;
+    letter-spacing: 4px;
+    font-size: 22px;
+    margin-bottom: 16px;
+    text-shadow: 0 0 20px rgba(240,192,96,0.4);
+  }
+
+  .shop-category { margin-bottom: 16px; }
+  .shop-cat-title {
+    color: #a08040;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #3a2a0a;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+
+  .shop-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #2a1a0a;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    gap: 10px;
+  }
+
+  .shop-item-info { flex: 1; }
+  .shop-item-name { color: #e8d5a3; font-size: 12px; font-weight: bold; margin-bottom: 2px; }
+  .shop-item-desc { color: #6a5a3a; font-size: 10px; }
+  .shop-item-level { color: #a08040; font-size: 9px; letter-spacing: 1px; }
+
+  .shop-buy-btn {
+    background: linear-gradient(135deg, #3a2008, #5a3010);
+    border: 1px solid #7a5020;
+    border-radius: 3px;
+    color: #f0c060;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    padding: 5px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.1s;
+    min-width: 70px;
+    text-align: center;
+  }
+  .shop-buy-btn:hover { background: linear-gradient(135deg, #5a3010, #7a4020); }
+  .shop-buy-btn:disabled { opacity: 0.3; cursor: not-allowed; background: #1a1208; }
+
+  .shop-close {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    background: linear-gradient(135deg, #1a1208, #2a1a08);
+    border: 1px solid #4a3010;
+    border-radius: 4px;
+    color: #e8c060;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    padding: 10px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.1s;
+  }
+  .shop-close:hover { background: linear-gradient(135deg, #2a1a10, #3a2a10); }
+
+  /* ===== KEY HINTS ===== */
+  .key-hints {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 2px;
+  }
+  .key-hint {
+    background: #1a1208;
+    border: 1px solid #3a2a0a;
+    border-radius: 2px;
+    padding: 1px 5px;
+    font-size: 8px;
+    color: #7a6a4a;
+    letter-spacing: 0.5px;
+  }
+  .key-hint span { color: #c0a060; }
+
+  /* ===== DEPTH INDICATOR ===== */
+  .depth-bar-wrap {
+    background: #1a1208;
+    border: 1px solid #2a1a0a;
+    border-radius: 2px;
+    height: 6px;
+    margin-top: 3px;
+    overflow: hidden;
+  }
+  .depth-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #204080, #4060c0);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  /* ===== BUFF INDICATORS ===== */
+  .buff-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 3px;
+    min-height: 20px;
+  }
+  .buff-tag {
+    background: rgba(64,160,64,0.2);
+    border: 1px solid #307830;
+    border-radius: 2px;
+    padding: 1px 5px;
+    font-size: 8px;
+    color: #60e080;
+    letter-spacing: 0.3px;
+  }
+  .buff-tag.blue { background: rgba(64,100,200,0.2); border-color: #3050a0; color: #60a0e0; }
+  .buff-tag.gold { background: rgba(200,160,40,0.2); border-color: #a07820; color: #f0c060; }
+
+  /* ===== SCROLLBAR ===== */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #0a0a0a; }
+  ::-webkit-scrollbar-thumb { background: #3a2a0a; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="gameWrapper">
+  <!-- Main Game Canvas -->
+  <canvas id="gameCanvas" width="640" height="600"></canvas>
+
+  <!-- HUD Panel -->
+  <div id="hud">
+    <div class="hud-title">⛏ DEEP DELVE</div>
+
+    <!-- Money -->
+    <div class="hud-section">
+      <div class="hud-label">💰 Gold Coins</div>
+      <div class="hud-value gold" id="hudMoney">0</div>
+    </div>
+
+    <!-- Health & Stamina -->
+    <div class="hud-section">
+      <div class="hud-label">❤ Health</div>
+      <div class="hud-value" id="hudHealth">100 / 100</div>
+      <div class="stat-bar-wrap"><div class="stat-bar health" id="healthBar" style="width:100%"></div></div>
+      <div class="hud-label" style="margin-top:6px">⚡ Stamina</div>
+      <div class="hud-value" id="hudStamina">100 / 100</div>
+      <div class="stat-bar-wrap"><div class="stat-bar stamina" id="staminaBar" style="width:100%"></div></div>
+    </div>
+
+    <!-- Depth -->
+    <div class="hud-section">
+      <div class="hud-label">📍 Depth</div>
+      <div class="hud-value blue" id="hudDepth">0m</div>
+      <div class="depth-bar-wrap"><div class="depth-bar" id="depthBar" style="width:0%"></div></div>
+    </div>
+
+    <!-- Pickaxe & Speed -->
+    <div class="hud-section">
+      <div style="display:flex;gap:6px;">
+        <div style="flex:1">
+          <div class="hud-label">⛏ Pick Power</div>
+          <div class="hud-value" id="hudPick">1</div>
+        </div>
+        <div style="flex:1">
+          <div class="hud-label">👟 Speed</div>
+          <div class="hud-value" id="hudSpeed">1</div>
+        </div>
+        <div style="flex:1">
+          <div class="hud-label">🎒 Bag</div>
+          <div class="hud-value" id="hudBag">16</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Buffs -->
+    <div class="hud-section">
+      <div class="hud-label">✨ Active Buffs</div>
+      <div class="buff-list" id="buffList"></div>
+    </div>
+
+    <!-- Inventory -->
+    <div class="hud-section">
+      <div class="hud-label">🎒 Inventory (<span id="invCount">0</span>/<span id="invMax">16</span>)</div>
+      <div class="inv-grid" id="invGrid"></div>
+    </div>
+
+    <!-- Quick Upgrades -->
+    <div class="hud-section">
+      <div class="hud-label">🏪 Quick Shop (on surface)</div>
+      <button class="upgrade-btn" id="btnSell" onclick="quickSell()">
+        <span>💰 SELL ALL</span><span class="cost" id="sellPreview">+0g</span>
+      </button>
+      <button class="upgrade-btn" id="btnShop" onclick="openShop()">
+        <span>🔨 UPGRADE SHOP</span><span class="cost">→</span>
+      </button>
+    </div>
+
+    <!-- Key Hints -->
+    <div class="hud-section">
+      <div class="hud-label">Controls</div>
+      <div class="key-hints">
+        <div class="key-hint"><span>WASD/↑↓←→</span> Move</div>
+        <div class="key-hint"><span>F / Click</span> Mine</div>
+        <div class="key-hint"><span>T</span> Teleport</div>
+        <div class="key-hint"><span>E</span> Shop</div>
+        <div class="key-hint"><span>1-5</span> Use item</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Message Log -->
+<div id="messageLog"></div>
+
+<!-- Shop Overlay -->
+<div id="shopOverlay" onclick="closeShopIfBackground(event)">
+  <div id="shopPanel">
+    <h2>⛏ UPGRADE SHOP ⛏</h2>
+    <div id="shopContent"></div>
+    <button class="shop-close" onclick="closeShop()">[ CLOSE SHOP ]</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  DEEP DELVE — Complete Mining Game
+//  All game logic in one file, no external dependencies.
+// ============================================================
+
+// ===== CANVAS SETUP =====
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;   // 640
+const H = canvas.height;  // 600
+
+// ===== CONSTANTS =====
+const TILE = 32;           // tile size in pixels
+const COLS = Math.floor(W / TILE); // 20 tiles wide
+const SURFACE_ROWS = 3;    // sky/surface rows above ground
+const WORLD_ROWS = 120;    // total world height in tiles
+const VISIBLE_ROWS = Math.floor(H / TILE); // ~18 visible rows
+
+// ===== BLOCK TYPES =====
+// Each block type: { name, emoji, color, hp, value, rarity, depth, special }
+const BLOCKS = {
+  AIR:      { name:'Air',       color: null,      hp: 0,   value: 0,    rarity: 1.0  },
+  DIRT:     { name:'Dirt',      color:'#6b4a2a',  hp: 2,   value: 1,    rarity: 0.0, depth: 0  },
+  STONE:    { name:'Stone',     color:'#7a7a7a',  hp: 5,   value: 2,    rarity: 0.0, depth: 3  },
+  COAL:     { name:'Coal',      color:'#3a3a3a',  hp: 6,   value: 8,    rarity: 0.18,depth: 2  },
+  IRON:     { name:'Iron',      color:'#c8a878',  hp: 8,   value: 20,   rarity: 0.10,depth: 8  },
+  GOLD:     { name:'Gold',      color:'#e8c020',  hp: 10,  value: 60,   rarity: 0.05,depth: 15 },
+  DIAMOND:  { name:'Diamond',   color:'#60e0ff',  hp: 15,  value: 200,  rarity: 0.02,depth: 25 },
+  RUBY:     { name:'Ruby',      color:'#e03060',  hp: 12,  value: 150,  rarity: 0.025,depth:20 },
+  EMERALD:  { name:'Emerald',   color:'#40c060',  hp: 14,  value: 180,  rarity: 0.02,depth: 30 },
+  OBSIDIAN: { name:'Obsidian',  color:'#1a0a2a',  hp: 25,  value: 5,    rarity: 0.0, depth: 35 },
+  LAVA:     { name:'Lava',      color:'#e05010',  hp: 0,   value: 0,    rarity: 0.0, depth: 40, hazard:true },
+  BEDROCK:  { name:'Bedrock',   color:'#1a1a1a',  hp: 999, value: 0,    rarity: 0.0  },
+  CHEST:    { name:'Treasure!', color:'#c89020',  hp: 3,   value: 500,  rarity: 0.005,depth:10 },
+  MUSHROOM: { name:'Mushroom',  color:'#c06080',  hp: 1,   value: 15,   rarity: 0.04, depth: 5  },
+  CRYSTAL:  { name:'Crystal',   color:'#a060e0',  hp: 12,  value: 120,  rarity: 0.015,depth:18 },
+};
+
+// ===== CONSUMABLES =====
+const CONSUMABLES = [
+  { id:'speed_boost',   name:'Speed Potion',   emoji:'⚡',color:'#60c0e0',desc:'2x move speed (30s)',     cost:50,  duration:30,  effect:'speed',   mult:2   },
+  { id:'mining_boost',  name:'Mining Elixir',  emoji:'⛏',color:'#e08040',desc:'2x mining speed (30s)',   cost:80,  duration:30,  effect:'mining',  mult:2   },
+  { id:'sell_boost',    name:'Merchant Charm', emoji:'💰',color:'#f0c060',desc:'2x sell value (60s)',     cost:120, duration:60,  effect:'sell',    mult:2   },
+  { id:'light_boost',   name:'Lantern Oil',    emoji:'🔦',color:'#f0e060',desc:'2x light radius (45s)',   cost:60,  duration:45,  effect:'light',   mult:2   },
+  { id:'health_pot',    name:'Health Potion',  emoji:'❤', color:'#e04040',desc:'Restore 50 HP instantly', cost:40,  duration:0,   effect:'heal',    amt:50   },
+  { id:'stamina_pot',   name:'Stamina Tonic',  emoji:'🍵',color:'#40c080',desc:'Restore full stamina',    cost:30,  duration:0,   effect:'stamina', amt:100  },
+];
+
+// ===== UPGRADE TIERS =====
+const UPGRADES = {
+  pickaxe: { levels: [0,80,200,500,1200,3000], names:['Wooden','Stone','Iron','Gold','Diamond','Mythril'], power:[1,2,4,8,16,32] },
+  bag:     { levels: [0,60,160,400,900,2000],  names:['Small','Medium','Large','Huge','Giant','Infinite'],  cap: [16,24,32,48,64,96] },
+  speed:   { levels: [0,70,180,450,1000,2500], names:['Slow','Normal','Fast','Swift','Dash','Blur'],        spd: [1,1.4,1.8,2.3,3,4] },
+};
+
+// ===== GAME STATE =====
+const game = {
+  // World
+  world: [],          // 2D array [row][col] = block type string
+  cameraY: 0,         // camera scroll offset in pixels
+
+  // Player
+  px: Math.floor(COLS/2) * TILE,  // player x pixel
+  py: SURFACE_ROWS * TILE,        // player y pixel
+  pvx: 0,             // velocity x
+  pvy: 0,             // velocity y
+  onGround: false,
+  facing: 1,          // 1=right, -1=left
+  animFrame: 0,
+  animTimer: 0,
+  mineTarget: null,   // {row, col, progress}
+  mineTimer: 0,
+
+  // Stats
+  health: 100,
+  maxHealth: 100,
+  stamina: 100,
+  maxStamina: 100,
+  staminaRegen: 0,
+
+  // Economy
+  money: 0,
+  inventory: [],      // [{type, count}]
+
+  // Upgrades
+  pickLevel: 0,
+  bagLevel: 0,
+  speedLevel: 0,
+  consumables: [],    // [{...consumable, qty}] in hotbar (max 5)
+
+  // Buffs
+  buffs: {},          // { effect: { timeLeft, mult } }
+
+  // Misc
+  onSurface: true,
+  lavaDamageTimer: 0,
+  hazardFlash: 0,
+  running: true,
+  gameOver: false,
+};
+
+// ===== PARTICLES =====
+let particles = [];
+
+// ===== INPUT =====
+const keys = {};
+// mineActive: true when F is held OR mouse button held on canvas
+let mineActive = false;
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyT') teleportToSurface();
+  if (e.code === 'KeyE') { if (game.onSurface) openShop(); }
+  if (e.code === 'KeyF') mineActive = true;
+  const num = parseInt(e.key);
+  if (num >= 1 && num <= 5) useConsumable(num - 1);
+  e.preventDefault();
+});
+document.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (e.code === 'KeyF') mineActive = false;
+});
+// Mouse hold on canvas also triggers mining
+canvas.addEventListener('mousedown', e => { mineActive = true; e.preventDefault(); });
+canvas.addEventListener('mouseup',   () => { mineActive = false; });
+canvas.addEventListener('mouseleave',() => { mineActive = false; });
+
+// ===== WORLD GENERATION =====
+function generateWorld() {
+  game.world = [];
+  for (let r = 0; r < WORLD_ROWS; r++) {
+    game.world[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      game.world[r][c] = getBlockType(r, c);
+    }
+  }
+}
+
+function getBlockType(row, col) {
+  // Sky
+  if (row < SURFACE_ROWS) return 'AIR';
+  // Surface grass/dirt zone
+  if (row === SURFACE_ROWS) return 'DIRT';
+
+  const depth = row - SURFACE_ROWS; // depth below surface
+
+  // Bedrock at bottom
+  if (row >= WORLD_ROWS - 2) return 'BEDROCK';
+
+  // Lava veins deep
+  if (depth >= 40) {
+    const lavaNoise = pseudoNoise(col * 17 + row * 31, row * 7 + col * 13);
+    if (lavaNoise > 0.88) return 'LAVA';
+  }
+
+  // Random rare blocks
+  const rng = pseudoRandom(row, col);
+
+  // Try rare blocks first (depth-gated)
+  const candidates = Object.entries(BLOCKS).filter(([k, b]) =>
+    b.rarity > 0 && b.depth !== undefined && depth >= b.depth && k !== 'LAVA'
+  );
+
+  for (const [type, b] of candidates) {
+    if (rng < b.rarity * (1 + depth * 0.01)) return type;
+  }
+
+  // Base rock type by depth
+  if (depth >= 35) return 'OBSIDIAN';
+  if (depth >= 3)  return 'STONE';
+  return 'DIRT';
+}
+
+// Simple deterministic pseudo-random from (row, col)
+function pseudoRandom(row, col) {
+  let n = row * 374761393 + col * 668265263;
+  n = ((n ^ (n >> 13)) * 1274126177) & 0x7fffffff;
+  return (n & 0xffff) / 0xffff;
+}
+
+function pseudoNoise(a, b) {
+  return pseudoRandom(a & 0xff, b & 0xff);
+}
+
+// ===== BLOCK HP TRACKING =====
+// Maps "row_col" -> remaining HP
+const blockHP = {};
+
+function getBlockHP(row, col) {
+  const key = `${row}_${col}`;
+  if (blockHP[key] !== undefined) return blockHP[key];
+  const type = game.world[row]?.[col];
+  return type ? (BLOCKS[type]?.hp ?? 0) : 0;
+}
+
+function damageBlock(row, col, dmg) {
+  const key = `${row}_${col}`;
+  const type = game.world[row]?.[col];
+  if (!type || type === 'AIR' || type === 'BEDROCK' || type === 'LAVA') return;
+  const maxHp = BLOCKS[type].hp;
+  if (blockHP[key] === undefined) blockHP[key] = maxHp;
+  blockHP[key] -= dmg;
+  if (blockHP[key] <= 0) {
+    mineBlock(row, col, type);
+  }
+}
+
+function mineBlock(row, col, type) {
+  const key = `${row}_${col}`;
+  delete blockHP[key];
+  game.world[row][col] = 'AIR';
+
+  const bdata = BLOCKS[type];
+  if (bdata.value > 0) addToInventory(type, 1);
+
+  // Particle burst
+  const bx = col * TILE + TILE/2;
+  const by = row * TILE + TILE/2 - game.cameraY;
+  spawnParticles(bx, by, bdata.color || '#888', 12);
+
+  // Chest gives big bonus
+  if (type === 'CHEST') {
+    const bonus = Math.floor(300 + Math.random() * 500);
+    game.money += bonus;
+    showMessage(`💰 TREASURE! +${bonus}g!`, 'gold-msg');
+  }
+}
+
+// ===== INVENTORY =====
+function getBagCapacity() { return UPGRADES.bag.cap[game.bagLevel]; }
+
+function inventoryCount() { return game.inventory.reduce((s, e) => s + e.count, 0); }
+
+function addToInventory(type, count) {
+  const cap = getBagCapacity();
+  if (inventoryCount() >= cap) {
+    showMessage('🎒 Bag full! Teleport to sell!', 'warn-msg');
+    return false;
+  }
+  const existing = game.inventory.find(e => e.type === type);
+  if (existing) { existing.count += count; }
+  else { game.inventory.push({ type, count }); }
+  return true;
+}
+
+function sellAll() {
+  const sellMult = game.buffs['sell'] ? game.buffs['sell'].mult : 1;
+  let total = 0;
+  for (const entry of game.inventory) {
+    total += (BLOCKS[entry.type]?.value ?? 0) * entry.count;
+  }
+  total = Math.floor(total * sellMult);
+  game.inventory = [];
+  game.money += total;
+  if (total > 0) showMessage(`💰 Sold for ${total}g!${sellMult>1?' (BOOSTED)':''}`, 'gold-msg');
+  else showMessage('Nothing to sell.', '');
+  updateHUD();
+}
+
+// ===== QUICK SELL / SHOP =====
+function quickSell() { sellAll(); }
+
+function openShop() {
+  if (!game.onSurface) { showMessage('⬆ Must be on surface to shop!', 'warn-msg'); return; }
+  renderShop();
+  document.getElementById('shopOverlay').classList.add('active');
+}
+
+function closeShop() {
+  document.getElementById('shopOverlay').classList.remove('active');
+}
+
+function closeShopIfBackground(e) {
+  if (e.target === document.getElementById('shopOverlay')) closeShop();
+}
+
+function renderShop() {
+  const panel = document.getElementById('shopContent');
+  let html = '';
+
+  // ---- Sell All ----
+  const sellMult = game.buffs['sell']?.mult || 1;
+  const sellVal = Math.floor(game.inventory.reduce((s,e) => s+(BLOCKS[e.type]?.value||0)*e.count, 0) * sellMult);
+  html += `<div class="shop-category"><div class="shop-cat-title">💰 Sell Resources</div>
+    <div class="shop-item">
+      <div class="shop-item-info">
+        <div class="shop-item-name">💰 Sell All Resources</div>
+        <div class="shop-item-desc">Inventory value: ${sellVal}g${sellMult>1?' (boosted)':''}</div>
+        <div class="shop-item-level">${inventoryCount()} items in bag</div>
+      </div>
+      <button class="shop-buy-btn" onclick="sellAll();renderShop();" ${inventoryCount()===0?'disabled':''}>
+        SELL ALL
+      </button>
+    </div>
+  </div>`;
+
+  // ---- Upgrades ----
+  // Map UPGRADES key → game state property name
+  const statKey = { pickaxe:'pickLevel', bag:'bagLevel', speed:'speedLevel' };
+  const icons    = { pickaxe:'⛏', bag:'🎒', speed:'👟' };
+
+  html += `<div class="shop-category"><div class="shop-cat-title">⬆ Upgrades</div>`;
+
+  for (const [key, data] of Object.entries(UPGRADES)) {
+    const lvl   = game[statKey[key]];          // correct property name
+    const maxed = lvl >= data.levels.length - 1;
+    const nextCost  = maxed ? 0 : data.levels[lvl + 1];
+    const canAfford = !maxed && game.money >= nextCost;
+    const levelName = data.names[lvl];
+    const nextName  = maxed ? '—' : data.names[lvl + 1];
+
+    html += `<div class="shop-item">
+      <div class="shop-item-info">
+        <div class="shop-item-name">${icons[key]} ${key.charAt(0).toUpperCase()+key.slice(1)} Upgrade</div>
+        <div class="shop-item-desc">Current: ${levelName} (Lv ${lvl})</div>
+        <div class="shop-item-level">${maxed ? 'MAX LEVEL' : `Next: ${nextName}`}</div>
+      </div>
+      <button class="shop-buy-btn" onclick="buyUpgrade('${key}')" ${(maxed || !canAfford) ? 'disabled':''}>
+        ${maxed ? 'MAX' : `${nextCost}g`}
+      </button>
+    </div>`;
+  }
+  html += `</div>`;
+
+  // ---- Consumables ----
+  html += `<div class="shop-category"><div class="shop-cat-title">🧪 Consumables (Hotkeys 1–5)</div>`;
+  for (const cons of CONSUMABLES) {
+    const canAfford = game.money >= cons.cost;
+    const owned = game.consumables.find(c => c.id === cons.id);
+    html += `<div class="shop-item">
+      <div class="shop-item-info">
+        <div class="shop-item-name">${cons.emoji} ${cons.name}</div>
+        <div class="shop-item-desc">${cons.desc}</div>
+        <div class="shop-item-level">Owned: ${owned ? owned.qty : 0}</div>
+      </div>
+      <button class="shop-buy-btn" onclick="buyConsumable('${cons.id}')" ${canAfford?'':'disabled'}>
+        ${cons.cost}g
+      </button>
+    </div>`;
+  }
+  html += `</div>`;
+
+  panel.innerHTML = html;
+}
+
+function buyUpgrade(key) {
+  const statKey = { pickaxe:'pickLevel', bag:'bagLevel', speed:'speedLevel' };
+  const data = UPGRADES[key];
+  const prop = statKey[key];
+  const lvl = game[prop];
+  if (lvl >= data.levels.length - 1) return;
+  const cost = data.levels[lvl + 1];
+  if (game.money < cost) { showMessage('Not enough gold!', 'warn-msg'); return; }
+  game.money -= cost;
+  game[prop]++;
+  showMessage(`✅ ${key} upgraded to ${data.names[game[prop]]}!`, 'good-msg');
+  updateHUD();
+  renderShop();
+}
+
+function buyConsumable(id) {
+  const cons = CONSUMABLES.find(c => c.id === id);
+  if (!cons) return;
+  if (game.money < cons.cost) { showMessage('Not enough gold!', 'warn-msg'); return; }
+  game.money -= cons.cost;
+  const owned = game.consumables.find(c => c.id === id);
+  if (owned) { owned.qty++; }
+  else {
+    if (game.consumables.length >= 5) { showMessage('Hotbar full! (max 5 types)', 'warn-msg'); game.money += cons.cost; return; }
+    game.consumables.push({ ...cons, qty: 1 });
+  }
+  showMessage(`${cons.emoji} Bought ${cons.name}!`, 'good-msg');
+  updateHUD();
+  renderShop();
+}
+
+function useConsumable(index) {
+  const item = game.consumables[index];
+  if (!item || item.qty <= 0) return;
+  item.qty--;
+  if (item.qty === 0) game.consumables.splice(index, 1);
+
+  if (item.effect === 'heal') {
+    game.health = Math.min(game.maxHealth, game.health + item.amt);
+    showMessage('❤ Restored HP!', 'good-msg');
+  } else if (item.effect === 'stamina') {
+    game.stamina = game.maxStamina;
+    showMessage('🍵 Stamina restored!', 'good-msg');
+  } else {
+    // Timed buff
+    game.buffs[item.effect] = { timeLeft: item.duration, mult: item.mult, name: item.name, emoji: item.emoji };
+    showMessage(`${item.emoji} ${item.name} active!`, 'good-msg');
+  }
+  updateHUD();
+}
+
+// ===== TELEPORT =====
+function teleportToSurface() {
+  if (game.onSurface) return;
+  // Flash effect
+  game.hazardFlash = 0.5;
+  game.px = Math.floor(COLS / 2) * TILE;
+  game.py = (SURFACE_ROWS - 1) * TILE;
+  game.pvx = 0; game.pvy = 0;
+  game.cameraY = 0;
+  game.onSurface = true;
+  showMessage('✨ Teleported to surface!', 'good-msg');
+}
+
+// ===== PARTICLES =====
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 4;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1,
+      color,
+      life: 0.8 + Math.random() * 0.6,
+      maxLife: 1.0,
+      size: 2 + Math.random() * 3,
+    });
+  }
+}
+
+// ===== MESSAGES =====
+function showMessage(text, cls = '') {
+  const log = document.getElementById('messageLog');
+  const div = document.createElement('div');
+  div.className = `msg ${cls}`;
+  div.textContent = text;
+  log.prepend(div);
+  setTimeout(() => div.remove(), 2600);
+}
+
+// ===== HUD UPDATE =====
+function updateHUD() {
+  document.getElementById('hudMoney').textContent = game.money + 'g';
+  document.getElementById('hudHealth').textContent = `${Math.ceil(game.health)} / ${game.maxHealth}`;
+  document.getElementById('hudStamina').textContent = `${Math.ceil(game.stamina)} / ${game.maxStamina}`;
+  document.getElementById('healthBar').style.width = (game.health / game.maxHealth * 100) + '%';
+  document.getElementById('staminaBar').style.width = (game.stamina / game.maxStamina * 100) + '%';
+
+  const depth = Math.max(0, Math.floor((game.py / TILE) - SURFACE_ROWS));
+  document.getElementById('hudDepth').textContent = depth + 'm';
+  const maxDepth = WORLD_ROWS - SURFACE_ROWS - 2;
+  document.getElementById('depthBar').style.width = Math.min(100, (depth / maxDepth) * 100) + '%';
+
+  document.getElementById('hudPick').textContent = `${UPGRADES.pickaxe.names[game.pickLevel]} (×${UPGRADES.pickaxe.power[game.pickLevel]})`;
+  document.getElementById('hudSpeed').textContent = UPGRADES.speed.spd[game.speedLevel].toFixed(1) + 'x';
+  document.getElementById('hudBag').textContent = getBagCapacity();
+
+  // Inventory
+  document.getElementById('invCount').textContent = inventoryCount();
+  document.getElementById('invMax').textContent = getBagCapacity();
+  const grid = document.getElementById('invGrid');
+  const slots = getBagCapacity();
+  let html = '';
+  // Collapse inventory to unique types
+  const items = [...game.inventory];
+  for (let i = 0; i < Math.min(16, slots); i++) {
+    const item = items[i];
+    if (item) {
+      const col = BLOCKS[item.type]?.color || '#888';
+      html += `<div class="inv-slot filled" title="${BLOCKS[item.type]?.name}" style="background:${col}22;border-color:${col}55">
+        <span style="font-size:13px;color:${col}">■</span>
+        <span class="inv-slot-count">${item.count}</span>
+      </div>`;
+    } else {
+      html += `<div class="inv-slot"></div>`;
+    }
+  }
+  grid.innerHTML = html;
+
+  // Sell preview
+  let sellVal = game.inventory.reduce((s, e) => s + (BLOCKS[e.type]?.value||0)*e.count, 0);
+  const sellMult = game.buffs['sell']?.mult || 1;
+  document.getElementById('sellPreview').textContent = `+${Math.floor(sellVal * sellMult)}g`;
+
+  // Buffs
+  const buffList = document.getElementById('buffList');
+  let bhtml = '';
+  for (const [effect, buff] of Object.entries(game.buffs)) {
+    const cls = effect==='sell'?'gold':effect==='light'?'':effect==='mining'?'':'blue';
+    bhtml += `<span class="buff-tag ${cls}">${buff.emoji} ${Math.ceil(buff.timeLeft)}s</span>`;
+  }
+  // Show consumables in hotbar
+  for (let i = 0; i < game.consumables.length; i++) {
+    const c = game.consumables[i];
+    bhtml += `<span class="buff-tag" style="opacity:0.8">${c.emoji}[${i+1}]×${c.qty}</span>`;
+  }
+  buffList.innerHTML = bhtml || '<span style="color:#3a2a0a;font-size:8px">None active</span>';
+
+  // Surface shop buttons
+  const onSurf = game.onSurface;
+  document.getElementById('btnSell').classList.toggle('disabled', !onSurf);
+  document.getElementById('btnShop').classList.toggle('disabled', !onSurf);
+}
+
+// ===== PHYSICS & MOVEMENT =====
+// Player hitbox (relative to game.px, game.py which is top-left of the TILE slot)
+const PW = 18;   // hitbox width  (slightly narrower than tile)
+const PH = 26;   // hitbox height
+const PX_OFF = (TILE - PW) / 2;  // horizontal offset inside tile slot
+const PY_OFF = TILE - PH;        // vertical offset (bottom-aligned)
+
+// Physics tuning — all per-frame at 60fps; we scale by dt
+const GRAVITY_ACCEL = 28;   // pixels/s²  (applied each frame × dt)
+const MAX_FALL = 18;         // max fall speed px/frame
+const JUMP_VEL  = -11;       // initial jump velocity (px/frame impulse)
+const H_ACCEL   = 2.2;       // horizontal acceleration factor
+const H_FRICTION = 0.78;     // horizontal friction when no key held
+const H_AIR_MULT = 0.7;      // air-control multiplier
+
+function getPickPower() {
+  const base = UPGRADES.pickaxe.power[game.pickLevel];
+  return game.buffs['mining'] ? base * game.buffs['mining'].mult : base;
+}
+
+function getMoveSpeed() {
+  const base = UPGRADES.speed.spd[game.speedLevel];
+  const speedBuff = game.buffs['speed'] ? game.buffs['speed'].mult : 1;
+  // Target horizontal speed in px/frame
+  return base * speedBuff * 3.2;
+}
+
+function isBlockSolid(row, col) {
+  if (row < 0 || col < 0 || col >= COLS || row >= WORLD_ROWS) return true;
+  const t = game.world[row]?.[col];
+  return t && t !== 'AIR' && t !== 'LAVA';
+}
+
+function isBlockHazard(row, col) {
+  if (row < 0 || col < 0 || col >= COLS || row >= WORLD_ROWS) return false;
+  return game.world[row]?.[col] === 'LAVA';
+}
+
+// ---- Swept AABB helpers ----
+// Returns the player's world-space left edge
+function playerLeft()   { return game.px + PX_OFF; }
+function playerRight()  { return game.px + PX_OFF + PW; }
+function playerTop()    { return game.py + PY_OFF; }
+function playerBottom() { return game.py + PY_OFF + PH; }
+
+// Sweep the player box by (dx, 0); returns actual dx moved and whether we hit
+function sweepX(dx) {
+  if (dx === 0) return 0;
+  const steps = Math.ceil(Math.abs(dx));
+  const step  = dx / steps;
+  for (let i = 0; i < steps; i++) {
+    const nextLeft  = playerLeft()  + step;
+    const nextRight = playerRight() + step;
+    const topRow    = Math.floor(playerTop()          / TILE);
+    const botRow    = Math.floor((playerBottom() - 0.5) / TILE);
+    if (step > 0) {
+      const col = Math.floor((nextRight - 0.5) / TILE);
+      if (isBlockSolid(topRow, col) || isBlockSolid(botRow, col)) {
+        // Push flush to wall
+        game.px = col * TILE - PX_OFF - PW;
+        game.pvx = 0;
+        return;
+      }
+    } else {
+      const col = Math.floor(nextLeft / TILE);
+      if (isBlockSolid(topRow, col) || isBlockSolid(botRow, col)) {
+        game.px = (col + 1) * TILE - PX_OFF;
+        game.pvx = 0;
+        return;
+      }
+    }
+    game.px += step;
+  }
+}
+
+// Sweep the player box by (0, dy); returns whether we landed / hit ceiling
+function sweepY(dy) {
+  if (dy === 0) return;
+  const steps = Math.ceil(Math.abs(dy));
+  const step  = dy / steps;
+  for (let i = 0; i < steps; i++) {
+    const nextTop    = playerTop()    + step;
+    const nextBottom = playerBottom() + step;
+    const leftCol    = Math.floor((playerLeft()  + 0.5) / TILE);
+    const rightCol   = Math.floor((playerRight() - 1.5) / TILE);
+    if (step > 0) {
+      const row = Math.floor((nextBottom - 0.5) / TILE);
+      if (isBlockSolid(row, leftCol) || isBlockSolid(row, rightCol)) {
+        // Land on top of block — flush to surface
+        game.py = row * TILE - PY_OFF - PH;
+        game.pvy = 0;
+        game.onGround = true;
+        return;
+      }
+    } else {
+      const row = Math.floor(nextTop / TILE);
+      if (isBlockSolid(row, leftCol) || isBlockSolid(row, rightCol)) {
+        game.py = (row + 1) * TILE - PY_OFF;
+        game.pvy = 0;
+        return;
+      }
+    }
+    game.py += step;
+  }
+}
+
+function updatePhysics(dt) {
+  // -- Gravity (accumulate, cap fall speed) --
+  game.pvy = Math.min(game.pvy + GRAVITY_ACCEL * dt, MAX_FALL);
+
+  const targetSpeed = getMoveSpeed();
+  let moving = false;
+
+  // -- Horizontal acceleration (smooth, not snap) --
+  const accel = game.onGround ? H_ACCEL : H_ACCEL * H_AIR_MULT;
+  if (keys['ArrowLeft'] || keys['KeyA']) {
+    game.pvx = Math.max(game.pvx - accel, -targetSpeed);
+    game.facing = -1;
+    moving = true;
+  } else if (keys['ArrowRight'] || keys['KeyD']) {
+    game.pvx = Math.min(game.pvx + accel, targetSpeed);
+    game.facing = 1;
+    moving = true;
+  } else {
+    // Friction deceleration
+    game.pvx *= H_FRICTION;
+    if (Math.abs(game.pvx) < 0.1) game.pvx = 0;
+  }
+
+  // -- Jump (W / Up arrow) --
+  if ((keys['ArrowUp'] || keys['KeyW']) && game.onGround && game.stamina > 10) {
+    game.pvy = JUMP_VEL;
+    game.stamina -= 8;
+    game.onGround = false;
+  }
+
+  // -- Sweep collisions -- (separate X then Y for clean corner handling)
+  game.onGround = false;
+  sweepX(game.pvx);
+  sweepY(game.pvy);
+
+  // -- World bounds --
+  if (game.px < -PX_OFF) { game.px = -PX_OFF; game.pvx = 0; }
+  if (game.px + PX_OFF + PW > COLS * TILE) { game.px = COLS * TILE - PX_OFF - PW; game.pvx = 0; }
+
+  // -- Smooth camera (lerp toward player center) --
+  const targetCamY = game.py - H / 2 + TILE;
+  game.cameraY += (targetCamY - game.cameraY) * 0.1;
+  game.cameraY = Math.max(0, game.cameraY);
+
+  // -- Stamina regen --
+  game.staminaRegen += dt;
+  if (game.staminaRegen > 0.75) {
+    game.stamina = Math.min(game.maxStamina, game.stamina + 2);
+    game.staminaRegen = 0;
+  }
+
+  // -- Surface check --
+  const playerRow = Math.floor(playerBottom() / TILE);
+  game.onSurface = playerRow <= SURFACE_ROWS + 1;
+
+  checkLavaDamage();
+
+  // -- Walk animation --
+  if (moving && game.onGround) {
+    game.animTimer += dt;
+    if (game.animTimer > 0.13) { game.animTimer = 0; game.animFrame = (game.animFrame + 1) % 4; }
+  } else if (!moving) {
+    game.animFrame = 0; game.animTimer = 0;
+  }
+}
+
+function checkLavaDamage() {
+  // Check player tiles for lava
+  const row = Math.floor((game.py + 20) / TILE);
+  const col = Math.floor((game.px + TILE/2) / TILE);
+  let inLava = false;
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (isBlockHazard(row + dr, col + dc)) inLava = true;
+    }
+  }
+  if (inLava) {
+    game.lavaDamageTimer++;
+    if (game.lavaDamageTimer > 20) {
+      game.lavaDamageTimer = 0;
+      game.health -= 10;
+      game.hazardFlash = 1;
+      showMessage('🔥 Lava damage!', 'warn-msg');
+    }
+  } else {
+    game.lavaDamageTimer = 0;
+  }
+
+  if (game.health <= 0 && !game.gameOver) {
+    game.gameOver = true;
+    showMessage('💀 YOU DIED — Press R to restart', 'warn-msg');
+  }
+}
+
+// ===== MINING =====
+function updateMining(dt) {
+  // F key or mouse hold triggers mining
+  if (mineActive) {
+    // Determine target block based on facing direction and down key
+    const playerRow = Math.floor((playerBottom() - 2) / TILE);
+    const playerCol = Math.floor((game.px + TILE/2) / TILE);
+
+    let targetRow, targetCol;
+    if (keys['ArrowDown'] || keys['KeyS']) {
+      targetRow = playerRow + 1; targetCol = playerCol;
+    } else if (keys['ArrowLeft'] || keys['KeyA']) {
+      targetRow = playerRow; targetCol = playerCol - 1;
+    } else if (keys['ArrowRight'] || keys['KeyD']) {
+      targetRow = playerRow; targetCol = playerCol + 1;
+    } else {
+      // Default: mine in the direction the player faces
+      targetRow = playerRow; targetCol = playerCol + game.facing;
+    }
+
+    const blockType = game.world[targetRow]?.[targetCol];
+    if (blockType && blockType !== 'AIR' && blockType !== 'BEDROCK' && blockType !== 'LAVA') {
+      // Start or continue mining
+      if (!game.mineTarget || game.mineTarget.row !== targetRow || game.mineTarget.col !== targetCol) {
+        game.mineTarget = { row: targetRow, col: targetCol, progress: 0 };
+        game.mineTimer = 0;
+      }
+      // Mine at rate based on pick power vs block HP
+      game.mineTimer++;
+      const hp = getBlockHP(targetRow, targetCol);
+      const maxHp = BLOCKS[blockType].hp;
+      const mineRate = getPickPower() / 30; // damage per frame
+
+      if (game.mineTimer % 3 === 0) {
+        // Drain stamina while mining
+        if (game.stamina > 0) {
+          game.stamina = Math.max(0, game.stamina - 0.5);
+          damageBlock(targetRow, targetCol, mineRate);
+        }
+      }
+
+      // Update mine progress for crack visualization
+      const curHp = getBlockHP(targetRow, targetCol);
+      game.mineTarget.progress = 1 - curHp / maxHp;
+    } else {
+      game.mineTarget = null;
+    }
+  } else {
+    game.mineTarget = null;
+  }
+}
+
+// ===== UPDATE BUFFS =====
+function updateBuffs(dt) {
+  for (const key of Object.keys(game.buffs)) {
+    game.buffs[key].timeLeft -= dt;
+    if (game.buffs[key].timeLeft <= 0) {
+      delete game.buffs[key];
+      showMessage(`${key} buff expired`, '');
+    }
+  }
+}
+
+// ===== UPDATE PARTICLES =====
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15;
+    p.life -= dt * 1.2;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// ===== LIGHT SYSTEM =====
+function getLightRadius() {
+  const base = 180;
+  const lightBuff = game.buffs['light'] ? game.buffs['light'].mult : 1;
+  return base * lightBuff;
+}
+
+// ===== RENDERING =====
+
+// Draw the sky gradient
+function drawSky() {
+  const skyH = SURFACE_ROWS * TILE - game.cameraY;
+  if (skyH <= 0) return;
+  const grad = ctx.createLinearGradient(0, 0, 0, Math.min(skyH, H));
+  grad.addColorStop(0, '#1a2a4a');
+  grad.addColorStop(1, '#2a4a6a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, Math.min(skyH, H));
+
+  // Stars
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  for (let s = 0; s < 40; s++) {
+    const sx = pseudoRandom(s, 7) * W;
+    const sy = pseudoRandom(s, 13) * (SURFACE_ROWS * TILE);
+    const ss = 0.8 + pseudoRandom(s, 19) * 1.4;
+    const screenY = sy - game.cameraY;
+    if (screenY < skyH) ctx.fillRect(sx, screenY, ss, ss);
+  }
+}
+
+// Draw all tiles visible on screen
+function drawWorld() {
+  const startRow = Math.max(0, Math.floor(game.cameraY / TILE));
+  const endRow = Math.min(WORLD_ROWS - 1, startRow + VISIBLE_ROWS + 2);
+
+  for (let r = startRow; r <= endRow; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const type = game.world[r]?.[c];
+      if (!type || type === 'AIR') continue;
+      const bdata = BLOCKS[type];
+      const sx = c * TILE;
+      const sy = r * TILE - game.cameraY;
+
+      // Block base color
+      ctx.fillStyle = bdata.color;
+      ctx.fillRect(sx, sy, TILE, TILE);
+
+      // Texture detail (procedural)
+      drawBlockTexture(ctx, type, sx, sy, r, c);
+
+      // Mining crack overlay
+      if (game.mineTarget && game.mineTarget.row === r && game.mineTarget.col === c) {
+        drawCracks(ctx, sx, sy, game.mineTarget.progress);
+      }
+
+      // Block border/outline (subtle)
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(sx + 0.25, sy + 0.25, TILE - 0.5, TILE - 0.5);
+    }
+  }
+}
+
+function drawBlockTexture(ctx, type, sx, sy, row, col) {
+  const seed = row * 100 + col;
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+
+  if (type === 'DIRT') {
+    // Speckles
+    ctx.fillStyle = '#8b6a3a';
+    for (let i = 0; i < 4; i++) {
+      const tx = sx + pseudoRandom(seed + i, 0) * (TILE - 4);
+      const ty = sy + pseudoRandom(seed + i, 1) * (TILE - 4);
+      ctx.fillRect(tx, ty, 2, 2);
+    }
+  } else if (type === 'STONE') {
+    // Cracks
+    ctx.strokeStyle = '#5a5a5a';
+    ctx.lineWidth = 0.7;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(sx + pseudoRandom(seed,2)*TILE, sy + pseudoRandom(seed,3)*TILE);
+    ctx.lineTo(sx + pseudoRandom(seed,4)*TILE, sy + pseudoRandom(seed,5)*TILE);
+    ctx.stroke();
+  } else if (type === 'COAL') {
+    ctx.fillStyle = '#1a1a1a';
+    ctx.globalAlpha = 0.5;
+    for (let i = 0; i < 3; i++) {
+      const tx = sx + 4 + pseudoRandom(seed + i, 6) * (TILE - 8);
+      const ty = sy + 4 + pseudoRandom(seed + i, 7) * (TILE - 8);
+      ctx.fillRect(tx, ty, 3 + pseudoRandom(seed+i,8)*4, 3 + pseudoRandom(seed+i,9)*3);
+    }
+  } else if (type === 'LAVA') {
+    // Animated lava glow
+    const t = Date.now() / 600;
+    ctx.globalAlpha = 0.4;
+    const lavaGrad = ctx.createRadialGradient(sx+TILE/2, sy+TILE/2, 2, sx+TILE/2, sy+TILE/2, TILE);
+    lavaGrad.addColorStop(0, `rgba(255,200,80,${0.5 + Math.sin(t + seed)*0.3})`);
+    lavaGrad.addColorStop(1, 'rgba(200,40,0,0)');
+    ctx.fillStyle = lavaGrad;
+    ctx.fillRect(sx, sy, TILE, TILE);
+  } else if (type === 'CHEST') {
+    ctx.globalAlpha = 1;
+    // Draw chest detail
+    ctx.fillStyle = '#8b5e10';
+    ctx.fillRect(sx+3, sy+3, TILE-6, TILE-6);
+    ctx.fillStyle = '#f0c030';
+    ctx.fillRect(sx+2, sy+2, TILE-4, 8);
+    ctx.fillRect(sx + TILE/2 - 3, sy + TILE/2 - 3, 6, 6);
+    // Sparkle
+    const t2 = Date.now() / 400;
+    ctx.fillStyle = `rgba(255,255,180,${0.5+Math.sin(t2+seed)*0.5})`;
+    ctx.fillRect(sx+TILE/2-1, sy+2, 2, TILE-4);
+    ctx.fillRect(sx+2, sy+TILE/2-1, TILE-4, 2);
+  } else if (type === 'DIAMOND' || type === 'CRYSTAL') {
+    // Shimmer
+    const t3 = Date.now() / 300;
+    ctx.globalAlpha = 0.4 + Math.sin(t3 + seed) * 0.3;
+    ctx.fillStyle = 'white';
+    ctx.fillRect(sx + TILE/2 - 1, sy + 4, 2, TILE - 8);
+    ctx.fillRect(sx + 4, sy + TILE/2 - 1, TILE - 8, 2);
+  }
+
+  ctx.restore();
+}
+
+// Draw mining crack effect on a block
+function drawCracks(ctx, sx, sy, progress) {
+  ctx.save();
+  ctx.globalAlpha = progress * 0.85;
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.5;
+
+  const stages = Math.floor(progress * 5);
+  const patterns = [
+    [[8,8,20,12]],
+    [[8,8,20,12],[12,14,24,20]],
+    [[8,8,20,12],[12,14,24,20],[4,18,16,24]],
+    [[8,8,20,12],[12,14,24,20],[4,18,16,24],[20,6,28,14]],
+    [[8,8,20,12],[12,14,24,20],[4,18,16,24],[20,6,28,14],[6,22,18,28]],
+  ];
+
+  const lines = patterns[Math.min(stages, patterns.length-1)] || [];
+  ctx.beginPath();
+  for (const [x1,y1,x2,y2] of lines) {
+    ctx.moveTo(sx+x1, sy+y1);
+    ctx.lineTo(sx+x2, sy+y2);
+  }
+  ctx.stroke();
+
+  // Dark overlay as block breaks
+  ctx.fillStyle = `rgba(0,0,0,${progress * 0.4})`;
+  ctx.fillRect(sx, sy, TILE, TILE);
+  ctx.restore();
+}
+
+// Draw the player character
+function drawPlayer() {
+  const sx = Math.round(game.px);
+  const sy = Math.round(game.py - game.cameraY);
+  const f = game.facing;
+  const frame = game.animFrame;
+
+  ctx.save();
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(sx + TILE/2, sy + TILE - 2, 10, 3, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Leg animation
+  const legOffset = [0, 4, 0, -4][frame];
+
+  ctx.translate(sx + TILE/2, sy + TILE);
+  ctx.scale(f, 1);
+
+  // Boots
+  ctx.fillStyle = '#4a2a10';
+  ctx.fillRect(-7, -6 + legOffset, 6, 5);
+  ctx.fillRect(2, -6 - legOffset, 6, 5);
+
+  // Pants
+  ctx.fillStyle = '#3a5a8a';
+  ctx.fillRect(-7, -14, 14, 10);
+
+  // Body
+  ctx.fillStyle = '#8a4a2a'; // shirt
+  ctx.fillRect(-7, -24, 14, 12);
+
+  // Arm with pickaxe when mining
+  const mineAnim = game.mineTarget ? Math.sin(Date.now() / 100) * 8 : 0;
+  ctx.fillStyle = '#c0785a'; // skin
+  ctx.fillRect(7, -24 + mineAnim, 5, 10); // right arm
+
+  // Pickaxe
+  if (game.mineTarget) {
+    ctx.fillStyle = '#c8a878';
+    ctx.save();
+    ctx.translate(12, -20 + mineAnim);
+    ctx.rotate(0.6 + Math.sin(Date.now() / 100) * 0.3);
+    ctx.fillRect(0, -2, 14, 3); // handle
+    ctx.fillStyle = '#8a8a8a';
+    ctx.fillRect(10, -5, 5, 8); // head
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#c0785a';
+    ctx.fillRect(-12, -24, 5, 10); // left arm
+  }
+
+  // Head
+  ctx.fillStyle = '#c0785a';
+  ctx.fillRect(-7, -34, 14, 12);
+
+  // Eyes
+  ctx.fillStyle = '#2a1a0a';
+  ctx.fillRect(2, -30, 3, 3);
+
+  // Helmet
+  ctx.fillStyle = '#5a4a2a';
+  ctx.fillRect(-8, -36, 16, 6);
+  // Helmet lamp
+  ctx.fillStyle = '#f0e060';
+  ctx.fillRect(5, -36, 4, 4);
+  // Lamp glow
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = '#f0e060';
+  ctx.beginPath();
+  ctx.arc(7, -34, 10, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// Draw lighting overlay (darkness underground)
+function drawLighting() {
+  const depth = game.py / TILE - SURFACE_ROWS;
+  if (depth < 1) return; // on surface, no darkness
+
+  const alpha = Math.min(0.93, depth * 0.03);
+  const radius = getLightRadius();
+  const px = game.px + TILE/2;
+  const py = game.py - game.cameraY + TILE/2;
+
+  // Create darkness overlay with a hole for the light
+  const lightGrad = ctx.createRadialGradient(px, py, radius * 0.1, px, py, radius);
+  lightGrad.addColorStop(0, `rgba(0,0,0,0)`);
+  lightGrad.addColorStop(0.5, `rgba(0,0,0,${alpha * 0.3})`);
+  lightGrad.addColorStop(1, `rgba(0,0,0,${alpha})`);
+
+  // Full dark rectangle
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.fillRect(0, 0, W, H);
+
+  // Punch a light hole
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = lightGrad;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
+  // Soft warm glow ring
+  ctx.save();
+  ctx.globalAlpha = 0.07;
+  const warmGrad = ctx.createRadialGradient(px, py, 0, px, py, radius * 0.6);
+  warmGrad.addColorStop(0, '#f0d080');
+  warmGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = warmGrad;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+// Draw particles
+function drawParticles() {
+  for (const p of particles) {
+    const alpha = Math.max(0, p.life / 1.0);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    ctx.restore();
+  }
+}
+
+// Draw HUD overlays on canvas (depth zone label, hazard flash)
+function drawCanvasHUD() {
+  // Zone label
+  const depth = Math.max(0, Math.floor(game.py / TILE - SURFACE_ROWS));
+  let zoneName = 'SURFACE';
+  let zoneColor = '#60e080';
+  if (depth >= 40) { zoneName = 'INFERNO DEPTHS'; zoneColor = '#e04010'; }
+  else if (depth >= 25) { zoneName = 'DEEP CAVERNS'; zoneColor = '#a060e0'; }
+  else if (depth >= 15) { zoneName = 'LOWER MINES'; zoneColor = '#60a0e0'; }
+  else if (depth >= 5) { zoneName = 'UPPER MINES'; zoneColor = '#c0c0c0'; }
+
+  ctx.save();
+  ctx.font = 'bold 11px Courier New';
+  ctx.fillStyle = zoneColor;
+  ctx.globalAlpha = 0.7;
+  ctx.fillText(`▼ ${zoneName} — ${depth}m`, 8, 20);
+  ctx.restore();
+
+  // Hazard flash (lava damage)
+  if (game.hazardFlash > 0) {
+    ctx.save();
+    ctx.globalAlpha = game.hazardFlash * 0.4;
+    ctx.fillStyle = '#ff2200';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    game.hazardFlash = Math.max(0, game.hazardFlash - 0.05);
+  }
+
+  // Surface indicator
+  if (game.onSurface) {
+    ctx.save();
+    ctx.font = 'bold 12px Courier New';
+    ctx.fillStyle = '#60e080';
+    ctx.globalAlpha = 0.8;
+    ctx.fillText('[ ON SURFACE — Press E to shop, SELL to sell ]', 8, H - 12);
+    ctx.restore();
+  }
+
+  // Game Over
+  if (game.gameOver) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = 'bold 36px Courier New';
+    ctx.fillStyle = '#e04040';
+    ctx.textAlign = 'center';
+    ctx.fillText('YOU DIED', W/2, H/2 - 20);
+    ctx.font = '14px Courier New';
+    ctx.fillStyle = '#e8d5a3';
+    ctx.fillText('Press R to restart', W/2, H/2 + 20);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
+  // Teleport hint (when deep)
+  if (depth > 5 && !game.onSurface) {
+    ctx.save();
+    ctx.font = '9px Courier New';
+    ctx.fillStyle = 'rgba(200,180,120,0.5)';
+    ctx.fillText('[ T ] Teleport  |  [ F / Click ] Mine', 8, H - 12);
+    ctx.restore();
+  }
+}
+
+// Draw surface decorations (grass, rocks, trees)
+function drawSurfaceDecor() {
+  const groundY = SURFACE_ROWS * TILE - game.cameraY;
+  if (groundY < 0 || groundY > H) return;
+
+  // Grass line
+  ctx.fillStyle = '#3a8a30';
+  ctx.fillRect(0, groundY, W, 4);
+
+  // Some rocks and bushes
+  for (let c = 0; c < COLS; c++) {
+    const rng = pseudoRandom(c, 99);
+    if (rng < 0.15) {
+      // Bush
+      ctx.fillStyle = '#306820';
+      ctx.beginPath();
+      ctx.arc(c * TILE + TILE/2, groundY - 8, 8 + rng*6, 0, Math.PI*2);
+      ctx.fill();
+    } else if (rng < 0.25) {
+      // Rock
+      ctx.fillStyle = '#6a6a6a';
+      ctx.fillRect(c * TILE + 6, groundY - 6, 12, 6);
+    }
+  }
+
+  // Shop building at spawn
+  const shopX = Math.floor(COLS / 2) * TILE - 24;
+  const shopY = groundY - 52;
+  ctx.fillStyle = '#5a3a18';
+  ctx.fillRect(shopX, shopY, 48, 52);
+  ctx.fillStyle = '#e8c060';
+  ctx.fillRect(shopX + 14, shopY + 30, 20, 22); // door
+  ctx.fillStyle = '#7a5a28';
+  ctx.fillRect(shopX, shopY - 12, 48, 14); // roof
+  ctx.fillStyle = '#e8d5a3';
+  ctx.font = 'bold 8px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('SHOP', shopX + 24, shopY + 14);
+  ctx.textAlign = 'left';
+}
+
+// ===== MAIN GAME LOOP =====
+let lastTime = 0;
+const FRAME_TIME = 1000 / 60;
+
+function gameLoop(timestamp) {
+  if (!game.running) return;
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+
+  if (!game.gameOver) {
+    updatePhysics(dt);
+    updateMining(dt);
+    updateBuffs(dt);
+  }
+
+  updateParticles(dt);
+
+  // Restart
+  if (game.gameOver && keys['KeyR']) restartGame();
+
+  // ---- RENDER ----
+  ctx.clearRect(0, 0, W, H);
+
+  drawSky();
+  drawSurfaceDecor();
+  drawWorld();
+  drawPlayer();
+  drawLighting();
+  drawParticles();
+  drawCanvasHUD();
+
+  // Update DOM HUD every 2 frames
+  if (Math.floor(timestamp / FRAME_TIME) % 2 === 0) updateHUD();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== RESTART =====
+function restartGame() {
+  Object.assign(game, {
+    cameraY: 0,
+    px: Math.floor(COLS/2) * TILE,
+    py: SURFACE_ROWS * TILE,
+    pvx: 0, pvy: 0,
+    onGround: false, facing: 1,
+    animFrame: 0, animTimer: 0,
+    mineTarget: null, mineTimer: 0,
+    health: 100, maxHealth: 100,
+    stamina: 100, maxStamina: 100,
+    staminaRegen: 0,
+    money: 0, inventory: [],
+    pickLevel: 0, bagLevel: 0, speedLevel: 0,
+    consumables: [], buffs: {},
+    onSurface: true, lavaDamageTimer: 0,
+    hazardFlash: 0, gameOver: false,
+  });
+  Object.keys(blockHP).forEach(k => delete blockHP[k]);
+  particles.length = 0;
+  generateWorld();
+  showMessage('🌟 New game started!', 'good-msg');
+}
+
+// ===== INIT =====
+function init() {
+  generateWorld();
+  requestAnimationFrame(gameLoop);
+  showMessage('⛏ Welcome to DEEP DELVE! Mine deep, sell riches!', 'gold-msg');
+  setTimeout(() => showMessage('🎮 WASD/Arrows to move, F or Click to mine, T to teleport', ''), 1500);
+  setTimeout(() => showMessage('🏪 Reach the surface and press E to open shop', 'good-msg'), 3000);
+}
+
+init();
+</script>
+</body>
+</html>
