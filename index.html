@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -423,6 +424,9 @@
       <button class="upgrade-btn" id="btnShop" onclick="openShop()">
         <span>🔨 UPGRADE SHOP</span><span class="cost">→</span>
       </button>
+      <button class="upgrade-btn" id="btnTeleportSell" onclick="teleportAndSell()" style="background:linear-gradient(135deg,#0a1a2a,#0a2a3a);border-color:#2a6090;color:#60c0ff;">
+        <span>✨ TELEPORT &amp; SELL</span><span class="cost" id="tpSellPreview">+0g</span>
+      </button>
     </div>
 
     <!-- Key Hints -->
@@ -502,9 +506,9 @@ const CONSUMABLES = [
 
 // ===== UPGRADE TIERS =====
 const UPGRADES = {
-  pickaxe: { levels: [0,80,200,500,1200,3000], names:['Wooden','Stone','Iron','Gold','Diamond','Mythril'], power:[1,2,4,8,16,32] },
-  bag:     { levels: [0,60,160,400,900,2000],  names:['Small','Medium','Large','Huge','Giant','Infinite'],  cap: [16,24,32,48,64,96] },
-  speed:   { levels: [0,70,180,450,1000,2500], names:['Slow','Normal','Fast','Swift','Dash','Blur'],        spd: [1,1.4,1.8,2.3,3,4] },
+  pickaxe: { levels: [0,10,80,250,700,2000],  names:['Wooden','Stone','Iron','Gold','Diamond','Mythril'], power:[1,2,4,8,16,32] },
+  bag:     { levels: [0,15,80,250,600,1500],  names:['Small','Medium','Large','Huge','Giant','Infinite'],  cap: [16,24,32,48,64,96] },
+  speed:   { levels: [0,20,100,300,800,2000], names:['Slow','Normal','Fast','Swift','Dash','Blur'],        spd: [1,1.4,1.8,2.3,3,4] },
 };
 
 // ===== GAME STATE =====
@@ -636,6 +640,18 @@ function pseudoNoise(a, b) {
   return pseudoRandom(a & 0xff, b & 0xff);
 }
 
+// ===== SHOP PROTECTED BLOCKS =====
+const SHOP_COL = Math.floor(COLS / 2); // = 10
+const PROTECTED_BLOCKS = new Set([
+  `${SURFACE_ROWS}_${SHOP_COL - 2}`,  // left of shop
+  `${SURFACE_ROWS}_${SHOP_COL - 1}`,  // below-left of shop
+  `${SURFACE_ROWS}_${SHOP_COL}`,      // below-right of shop
+  `${SURFACE_ROWS}_${SHOP_COL + 1}`,  // right of shop
+]);
+function isProtectedBlock(row, col) {
+  return PROTECTED_BLOCKS.has(`${row}_${col}`);
+}
+
 // ===== BLOCK HP TRACKING =====
 // Maps "row_col" -> remaining HP
 const blockHP = {};
@@ -651,6 +667,7 @@ function damageBlock(row, col, dmg) {
   const key = `${row}_${col}`;
   const type = game.world[row]?.[col];
   if (!type || type === 'AIR' || type === 'BEDROCK' || type === 'LAVA') return;
+  if (isProtectedBlock(row, col)) { showMessage('🏪 This block supports the shop!', 'warn-msg'); return; }
   const maxHp = BLOCKS[type].hp;
   if (blockHP[key] === undefined) blockHP[key] = maxHp;
   blockHP[key] -= dmg;
@@ -861,6 +878,20 @@ function teleportToSurface() {
   showMessage('✨ Teleported to surface!', 'good-msg');
 }
 
+// ===== TELEPORT & SELL =====
+function teleportAndSell() {
+  if (game.gameOver) return;
+  const hadItems = inventoryCount() > 0;
+  if (game.onSurface) {
+    // Already on surface, just sell
+    if (hadItems) sellAll();
+    else showMessage('Nothing to sell.', '');
+    return;
+  }
+  teleportToSurface();
+  if (hadItems) setTimeout(() => sellAll(), 80);
+}
+
 // ===== PARTICLES =====
 function spawnParticles(x, y, color, count) {
   for (let i = 0; i < count; i++) {
@@ -930,7 +961,9 @@ function updateHUD() {
   // Sell preview
   let sellVal = game.inventory.reduce((s, e) => s + (BLOCKS[e.type]?.value||0)*e.count, 0);
   const sellMult = game.buffs['sell']?.mult || 1;
-  document.getElementById('sellPreview').textContent = `+${Math.floor(sellVal * sellMult)}g`;
+  const sellValStr = `+${Math.floor(sellVal * sellMult)}g`;
+  document.getElementById('sellPreview').textContent = sellValStr;
+  document.getElementById('tpSellPreview').textContent = sellValStr;
 
   // Buffs
   const buffList = document.getElementById('buffList');
@@ -950,6 +983,8 @@ function updateHUD() {
   const onSurf = game.onSurface;
   document.getElementById('btnSell').classList.toggle('disabled', !onSurf);
   document.getElementById('btnShop').classList.toggle('disabled', !onSurf);
+  // Teleport & Sell is always available
+  document.getElementById('btnTeleportSell').classList.toggle('disabled', false);
 }
 
 // ===== PHYSICS & MOVEMENT =====
@@ -1084,7 +1119,7 @@ function updatePhysics(dt) {
   // -- Jump (W / Up arrow) --
   if ((keys['ArrowUp'] || keys['KeyW']) && game.onGround && game.stamina > 10) {
     game.pvy = JUMP_VEL;
-    game.stamina -= 8;
+    game.stamina -= 5;
     game.onGround = false;
   }
 
@@ -1102,11 +1137,12 @@ function updatePhysics(dt) {
   game.cameraY += (targetCamY - game.cameraY) * 0.1;
   game.cameraY = Math.max(0, game.cameraY);
 
-  // -- Stamina regen --
-  game.staminaRegen += dt;
-  if (game.staminaRegen > 0.75) {
-    game.stamina = Math.min(game.maxStamina, game.stamina + 2);
-    game.staminaRegen = 0;
+  // -- Stamina regen (only when idle: standing still, on ground, not mining) --
+  const isIdle = !moving && game.onGround && !mineActive;
+  if (isIdle) {
+    const staminaFrac = game.stamina / game.maxStamina;
+    const regenRate = 2 + 35 * (staminaFrac * staminaFrac);
+    game.stamina = Math.min(game.maxStamina, game.stamina + regenRate * dt);
   }
 
   // -- Surface check --
@@ -1188,7 +1224,7 @@ function updateMining(dt) {
       if (game.mineTimer % 3 === 0) {
         // Drain stamina while mining
         if (game.stamina > 0) {
-          game.stamina = Math.max(0, game.stamina - 0.5);
+          game.stamina = Math.max(0, game.stamina - 0.1);
           damageBlock(targetRow, targetCol, mineRate);
         }
       }
